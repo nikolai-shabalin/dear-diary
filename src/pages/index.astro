@@ -58,13 +58,14 @@ import '../styles/global.css';
     <script>
         import { auth } from '../lib/firebase.ts';
         import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+        import { paths } from '../lib/paths.ts';
 
         const form = document.getElementById('loginForm');
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 // Уже авторизован — редирект на задачи
-                window.location.href = '/tasks';
+                window.location.href = paths.tasks();
             }
         });
 
@@ -80,7 +81,7 @@ import '../styles/global.css';
             if (submitBtn) submitBtn.disabled = true;
             try {
                 await signInWithEmailAndPassword(auth, email, password);
-                window.location.href = '/tasks';
+                window.location.href = paths.tasks();
             } catch (err) {
                 alert('Ошибка входа. Проверьте email/пароль.');
             } finally {
