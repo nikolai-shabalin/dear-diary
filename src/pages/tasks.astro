@@ -6,6 +6,7 @@ import TasksList from '../components/TasksList.astro';
 import CompletedTasks from '../components/CompletedTasks.astro';
 import SectionModal from '../components/SectionModal.astro';
 import TaskManager from '../components/TaskManager.astro';
+import GitHubLink from '../components/GitHubLink.astro';
 import '../styles/global.css';
 ---
 
@@ -40,6 +41,9 @@ import '../styles/global.css';
 
     <!-- Основной компонент управления задачами -->
     <TaskManager />
+
+    <!-- Плавающая ссылка на GitHub -->
+    <GitHubLink />
 
     <script>
         import { auth } from '../lib/firebase.ts';
