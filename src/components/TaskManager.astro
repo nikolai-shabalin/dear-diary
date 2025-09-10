@@ -149,6 +149,10 @@
                 this.handleAddInlineTask(e.detail);
             });
 
+            document.addEventListener('addTaskToSection', (e: any) => {
+                this.handleAddTaskToSection(e.detail.sectionId);
+            });
+
             document.addEventListener('updateTask', (e: any) => {
                 this.handleUpdateTask(e.detail);
             });
@@ -436,6 +440,40 @@
                 this.createInlineEditor(newTask);
             } catch (error) {
                 console.error('Ошибка создания inline задачи:', error);
+            }
+        }
+
+        private async handleAddTaskToSection(sectionId: string): Promise<void> {
+            try {
+                if (!this.userId) return;
+
+                // Получаем максимальный порядок в секции
+                const sectionTasks = this.tasks.filter(t => t.sectionId === sectionId);
+                const maxOrder = sectionTasks.length > 0 ? Math.max(...sectionTasks.map(t => t.order || 0)) : 0;
+
+                // Создаем новую задачу в секции
+                const createdRef = await addDoc(collection(db, 'users', this.userId, 'tasks'), {
+                    text: '',
+                    sectionId,
+                    order: maxOrder + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                });
+
+                const newTask: Task = {
+                    id: createdRef.id,
+                    text: '',
+                    sectionId,
+                    order: maxOrder + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                };
+                this.tasks.push(newTask);
+
+                // Создаем inline редактор для новой задачи
+                this.createInlineEditor(newTask);
+            } catch (error) {
+                console.error('Ошибка добавления задачи в секцию:', error);
             }
         }
 
