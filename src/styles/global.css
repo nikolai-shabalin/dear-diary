@@ -1,0 +1,125 @@
+/* Глобальные стили для приложения управления задачами - Mobile First */
+
+/* CSS переменные */
+:root {
+  --primary-color: #6366f1;
+  --primary-hover: #5855eb;
+  --secondary-color: #f3f4f6;
+  --accent-color: #10b981;
+  --danger-color: #ef4444;
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --border-color: #e5e7eb;
+  --border-hover: #d1d5db;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f9fafb;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --touch-target: 44px; /* Минимальный размер для touch элементов */
+  color-scheme: light dark;
+}
+
+*:focus-visible {
+  outline: 3px solid #000000;
+  outline-offset: 0.25rem;
+  border-radius: 0.13rem;
+}
+
+
+/* Сброс стилей */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Основной контейнер - Mobile First */
+#app {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.5rem;
+  min-height: 100vh;
+}
+
+/* Основной контент - Mobile First */
+.app-main {
+  background: var(--bg-primary);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  margin-top: -1rem;
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+
+/* Планшеты и больше */
+@media (min-width: 768px) {
+  #app {
+    max-width: 800px;
+    padding: 0 1rem 2rem;
+  }
+
+  .app-main {
+    margin-top: -2rem;
+  }
+
+  body {
+    line-height: 1.6;
+  }
+}
+
+/* Десктопы */
+@media (min-width: 1024px) {
+  #app {
+    padding: 0 2rem 3rem;
+  }
+}
+
+/* Скроллбар */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* Визуально скрытые элементы (для скринридеров) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

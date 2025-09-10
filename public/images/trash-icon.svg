@@ -1,0 +1,16 @@
+<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Корпус корзины -->
+  <path d="M6.5 2.5H13.5V4.5H6.5V2.5Z" fill="currentColor" opacity="0.8"/>
+  <path d="M5 4.5H15V16.5C15 17.0523 14.5523 17.5 14 17.5H6C5.44772 17.5 5 17.0523 5 16.5V4.5Z" fill="currentColor" opacity="0.9"/>
+  <!-- Крышка корзины -->
+  <path d="M3.5 4.5H16.5V6H3.5V4.5Z" fill="currentColor"/>
+  <!-- Ручка корзины -->
+  <path d="M7 7.5H13V8.5H7V7.5Z" fill="currentColor" opacity="0.6"/>
+  <path d="M7 10H13V11H7V10Z" fill="currentColor" opacity="0.6"/>
+  <path d="M7 12.5H13V13.5H7V12.5Z" fill="currentColor" opacity="0.6"/>
+  <!-- Тени и акценты -->
+  <path d="M14 5.5H6V6.5H14V5.5Z" fill="currentColor" opacity="0.4"/>
+  <circle cx="9" cy="8.5" r="0.5" fill="currentColor" opacity="0.7"/>
+  <circle cx="11" cy="10.5" r="0.5" fill="currentColor" opacity="0.7"/>
+  <circle cx="9" cy="12.5" r="0.5" fill="currentColor" opacity="0.7"/>
+</svg>

@@ -1,0 +1,271 @@
+---
+// Компонент модального окна для создания секции
+---
+
+<div id="sectionModal" class="section-modal">
+    <div class="section-modal__content">
+        <h3 class="section-modal__title">Создать новую секцию</h3>
+        <form id="addSectionForm" class="section-modal__form">
+            <input
+                type="text"
+                name="sectionName"
+                id="sectionNameInput"
+                class="section-modal__input"
+                placeholder="Название секции (например: Понедельник)"
+                required
+            >
+            <div class="section-modal__buttons">
+                <button type="submit" class="section-modal__btn section-modal__btn--primary">Создать</button>
+                <button type="button" id="cancelSectionBtn" class="section-modal__btn section-modal__btn--secondary">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Логика модального окна создания секции
+    class SectionModal {
+        private modal: HTMLElement;
+        private form: HTMLFormElement;
+        private input: HTMLInputElement;
+        private cancelBtn: HTMLButtonElement;
+
+        constructor() {
+            this.modal = document.getElementById('sectionModal') as HTMLElement;
+            this.form = document.getElementById('addSectionForm') as HTMLFormElement;
+            this.input = document.getElementById('sectionNameInput') as HTMLInputElement;
+            this.cancelBtn = document.getElementById('cancelSectionBtn') as HTMLButtonElement;
+            this.init();
+        }
+
+        private init(): void {
+            this.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleSubmit(e);
+            });
+
+            this.cancelBtn.addEventListener('click', () => {
+                this.close();
+            });
+
+            // Закрытие по клику вне модального окна
+            this.modal.addEventListener('click', (e) => {
+                if (e.target === this.modal) {
+                    this.close();
+                }
+            });
+
+            // Закрытие по Escape
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && this.isOpen()) {
+                    this.close();
+                }
+            });
+        }
+
+        private async handleSubmit(e: Event): Promise<void> {
+            const formData = new FormData(this.form);
+            const sectionName = formData.get('sectionName') as string;
+
+            if (!sectionName.trim()) return;
+
+            // Создаем событие для передачи данных в основной TaskManager
+            const addSectionEvent = new CustomEvent('addSection', {
+                detail: {
+                    name: sectionName.trim()
+                }
+            });
+
+            document.dispatchEvent(addSectionEvent);
+            this.close();
+        }
+
+        public open(): void {
+            this.modal.style.display = 'block';
+            this.input.focus();
+        }
+
+        public close(): void {
+            this.modal.style.display = 'none';
+            this.input.value = '';
+        }
+
+        public isOpen(): boolean {
+            return this.modal.style.display === 'block';
+        }
+
+        // Метод для программного открытия модального окна
+        public static openModal(): void {
+            const modal = document.getElementById('sectionModal') as HTMLElement;
+            const input = document.getElementById('sectionNameInput') as HTMLInputElement;
+            modal.style.display = 'block';
+            input.focus();
+        }
+    }
+
+    // Инициализация модального окна при загрузке DOM
+    document.addEventListener('DOMContentLoaded', () => {
+        new SectionModal();
+    });
+
+    // Экспортируем метод для открытия модального окна извне
+    (window as any).openSectionModal = SectionModal.openModal;
+</script>
+
+<style is:global>
+    /* Mobile First - Modal */
+    .section-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .section-modal__content {
+        background-color: var(--bg-primary);
+        margin: 10% auto;
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        width: 95%;
+        max-width: 400px;
+        box-shadow: var(--shadow-lg);
+        animation: modalSlideIn 0.3s ease-out;
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    @keyframes modalSlideIn {
+        from {
+            opacity: 0;
+            transform: translateY(-50px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .section-modal__title {
+        margin-bottom: 1rem;
+        color: var(--text-primary);
+        font-size: 1.125rem;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+
+    .section-modal__form {
+        margin: 0;
+    }
+
+    .section-modal__input {
+        width: 100%;
+        padding: 0.875rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        background: var(--bg-primary);
+        color: #000000;
+        min-height: var(--touch-target);
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .section-modal__input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .section-modal__buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        width: 100%;
+    }
+
+    .section-modal__btn {
+        padding: 0.875rem 1rem;
+        border: none;
+        border-radius: var(--radius-md);
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        min-height: var(--touch-target);
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.2s ease;
+    }
+
+    .section-modal__btn--primary {
+        background: var(--primary-color);
+        color: white;
+    }
+
+    .section-modal__btn--primary:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+    }
+
+    .section-modal__btn--secondary {
+        background: var(--secondary-color);
+        color: var(--text-primary);
+    }
+
+    .section-modal__btn--secondary:hover {
+        background: var(--border-color);
+    }
+
+    .section-modal__btn--primary:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+    }
+
+    .section-modal__btn--primary:active {
+        transform: translateY(0);
+    }
+
+    .section-modal__btn--secondary:hover {
+        background: var(--border-color);
+        transform: translateY(-1px);
+    }
+
+    .section-modal__btn--secondary:active {
+        transform: translateY(0);
+    }
+
+    /* Планшеты */
+    @media (min-width: 768px) {
+        .section-modal__content {
+            margin: 15% auto;
+            padding: 2rem;
+            max-width: 500px;
+        }
+
+        .section-modal__title {
+            font-size: 1.25rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-modal__input {
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-modal__buttons {
+            flex-direction: row;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        .section-modal__btn {
+            padding: 0.75rem 1.5rem;
+            min-height: auto;
+        }
+    }
+</style>

@@ -1,0 +1,577 @@
+---
+// Основной компонент управления задачами
+---
+
+<script>
+    import { auth, db } from '../lib/firebase.ts';
+    import {
+        collection,
+        doc,
+        getDocs,
+        getDoc,
+        setDoc,
+        addDoc,
+        updateDoc,
+        deleteDoc,
+        query,
+        orderBy,
+        where,
+        writeBatch
+    } from 'firebase/firestore';
+    import { onAuthStateChanged } from 'firebase/auth';
+
+    // Типы данных
+    interface Task {
+        id: string;
+        text: string;
+        sectionId: string;
+        order: number;
+        createdAt: Date;
+        completedAt?: Date;
+        isCompleted: boolean;
+    }
+
+    interface Section {
+        id: string;
+        name: string;
+        order: number;
+    }
+
+    // Класс управления задачами
+    class TaskManager {
+        private tasks: Task[] = [];
+        private sections: Section[] = [];
+        private userId: string | null = null;
+
+        constructor() {
+            this.init();
+        }
+
+        private async init(): Promise<void> {
+            try {
+                // Ждем авторизацию и затем загружаем данные
+                const waitForAuth = new Promise<void>((resolve) => {
+                    const unsub = onAuthStateChanged(auth as any, (user: any) => {
+                        if (user) {
+                            this.userId = user.uid;
+                            unsub();
+                            resolve();
+                        }
+                    });
+                });
+
+                await waitForAuth;
+
+                await this.ensureDefaultSection();
+                await this.loadData();
+                this.setupEventListeners();
+                (window as any).taskManagerInstance = this;
+                setTimeout(() => { this.renderTasks(); }, 100);
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+            }
+        }
+
+        private async loadData(): Promise<void> {
+            try {
+                if (!this.userId) return;
+
+                // Sections - загружаем все секции, включая default
+                const sectionsSnap = await getDocs(collection(db, 'users', this.userId, 'sections'));
+                this.sections = sectionsSnap.docs.map(d => ({
+                    id: d.id,
+                    name: (d.data() as any).name,
+                    order: (d.data() as any).order ?? 0
+                }));
+
+                // Сортируем секции по порядку
+                this.sections.sort((a, b) => a.order - b.order);
+
+                // Tasks
+                const tasksSnap = await getDocs(collection(db, 'users', this.userId, 'tasks'));
+                this.tasks = tasksSnap.docs.map(d => {
+                    const data: any = d.data();
+                    return {
+                        id: d.id,
+                        text: data.text,
+                        sectionId: data.sectionId,
+                        order: data.order ?? 0,
+                        createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : new Date(),
+                        completedAt: data.completedAt && data.completedAt.toDate ? data.completedAt.toDate() : undefined,
+                        isCompleted: !!data.isCompleted
+                    } as Task;
+                });
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+            }
+        }
+
+        private async ensureDefaultSection(): Promise<void> {
+            if (!this.userId) return;
+            const defaultRef = doc(db, 'users', this.userId, 'sections', 'default');
+            const snap = await getDoc(defaultRef);
+            if (!snap.exists()) {
+                await setDoc(defaultRef, { name: 'Основные задачи', order: 0 });
+            }
+        }
+
+        private setupEventListeners(): void {
+            // Слушаем события от компонентов
+            document.addEventListener('addTask', (e: any) => {
+                this.handleAddTask(e.detail.text);
+            });
+
+            document.addEventListener('addSection', (e: any) => {
+                this.handleAddSection(e.detail.name);
+            });
+
+            document.addEventListener('deleteSection', (e: any) => {
+                this.handleDeleteSection(e.detail.sectionId);
+            });
+
+            document.addEventListener('toggleTask', (e: any) => {
+                this.toggleTaskCompletion(e.detail.taskId);
+            });
+
+            document.addEventListener('deleteTask', (e: any) => {
+                this.handleDeleteTask(e.detail.taskId);
+            });
+
+            document.addEventListener('moveTask', (e: any) => {
+                this.handleMoveTask(e.detail);
+            });
+
+            document.addEventListener('moveTaskToSection', (e: any) => {
+                this.handleMoveTaskToSection(e.detail);
+            });
+
+            document.addEventListener('addInlineTask', (e: any) => {
+                this.handleAddInlineTask(e.detail);
+            });
+
+            document.addEventListener('updateTask', (e: any) => {
+                this.handleUpdateTask(e.detail);
+            });
+
+        }
+
+        private async handleAddTask(taskText: string): Promise<void> {
+            if (!taskText.trim()) return;
+
+            const sectionId = 'default';
+
+            // Определяем максимальный порядок для новой задачи
+            const sectionTasks = this.tasks.filter(t => t.sectionId === sectionId);
+            const maxOrder = sectionTasks.length > 0 ? Math.max(...sectionTasks.map(t => t.order || 0)) : 0;
+
+            try {
+                if (!this.userId) return;
+                const docRef = await addDoc(collection(db, 'users', this.userId, 'tasks'), {
+                    text: taskText.trim(),
+                    sectionId,
+                    order: maxOrder + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                });
+
+                const newTask: Task = {
+                    id: docRef.id,
+                    text: taskText.trim(),
+                    sectionId,
+                    order: maxOrder + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                };
+                this.tasks.push(newTask);
+
+                const tasksListInstance = (window as any).tasksListInstance;
+                if (tasksListInstance) {
+                    tasksListInstance.addTaskElement(newTask, this.sections);
+                }
+            } catch (error) {
+                console.error('Ошибка добавления задачи:', error);
+            }
+        }
+
+        private async handleAddSection(sectionName: string): Promise<void> {
+            if (!sectionName.trim()) return;
+
+            try {
+                if (!this.userId) return;
+
+                // Находим максимальный порядок среди существующих секций
+                const maxOrder = this.sections.length > 0 ? Math.max(...this.sections.map(s => s.order)) : 0;
+                const newOrder = maxOrder + 1;
+
+                const created = await addDoc(collection(db, 'users', this.userId, 'sections'), {
+                    name: sectionName.trim(),
+                    order: newOrder
+                });
+
+                this.sections.push({ id: created.id, name: sectionName.trim(), order: newOrder });
+                this.renderTasks();
+            } catch (error) {
+                console.error('Ошибка создания секции:', error);
+            }
+        }
+
+        private async handleDeleteSection(sectionId: string): Promise<void> {
+            try {
+                if (!this.userId) return;
+                await deleteDoc(doc(db, 'users', this.userId, 'sections', sectionId));
+
+                // Удаляем секцию из массива секций
+                this.sections = this.sections.filter(s => s.id !== sectionId);
+
+                // Обновляем порядок оставшихся секций в Firestore
+                const batch = writeBatch(db);
+                this.sections.forEach((section, index) => {
+                    const newOrder = index;
+                    if (section.order !== newOrder) {
+                        section.order = newOrder;
+                        batch.update(doc(db, 'users', this.userId!, 'sections', section.id), { order: newOrder });
+                    }
+                });
+                await batch.commit();
+
+                // Перерисовываем список задач
+                this.renderTasks();
+            } catch (error) {
+                console.error('Ошибка удаления секции:', error);
+            }
+        }
+
+
+
+        private async toggleTaskCompletion(taskId: string): Promise<void> {
+            const task = this.tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const wasCompleted = task.isCompleted;
+            task.isCompleted = !task.isCompleted;
+            task.completedAt = task.isCompleted ? new Date() : undefined;
+
+            try {
+                if (!this.userId) return;
+                await updateDoc(doc(db, 'users', this.userId, 'tasks', task.id), {
+                    isCompleted: task.isCompleted,
+                    completedAt: task.completedAt || null
+                });
+
+                // Обновляем DOM без полного перестроения
+                const tasksListInstance = (window as any).tasksListInstance;
+                if (tasksListInstance) {
+                    if (task.isCompleted) {
+                        // Задача завершена - удаляем из активных
+                        tasksListInstance.removeTaskElement(taskId);
+                    } else {
+                        // Задача активирована - добавляем обратно
+                        tasksListInstance.addTaskElement(task, this.sections);
+                    }
+                }
+
+                // Обновляем список завершенных задач
+                const completedTasksInstance = (window as any).completedTasksInstance;
+                if (completedTasksInstance) {
+                    if (task.isCompleted) {
+                        completedTasksInstance.addCompletedTask(task);
+                    } else {
+                        completedTasksInstance.removeCompletedTask(taskId);
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка обновления задачи:', error);
+            }
+        }
+
+        private async handleDeleteTask(taskId: string): Promise<void> {
+            const task = this.tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            try {
+                if (!this.userId) return;
+                await deleteDoc(doc(db, 'users', this.userId, 'tasks', taskId));
+
+                this.tasks = this.tasks.filter(t => t.id !== taskId);
+
+                // Обновляем DOM без полного перестроения
+                if (task.isCompleted) {
+                    // Удаляем из списка завершенных задач
+                    const completedTasksInstance = (window as any).completedTasksInstance;
+                    if (completedTasksInstance) {
+                        completedTasksInstance.removeCompletedTask(taskId);
+                    }
+                } else {
+                    // Удаляем из списка активных задач
+                    const tasksListInstance = (window as any).tasksListInstance;
+                    if (tasksListInstance) {
+                        tasksListInstance.removeTaskElement(taskId);
+                    }
+                }
+
+            } catch (error) {
+                console.error('Ошибка удаления задачи:', error);
+            }
+        }
+
+        // Обработка перемещения задачи между позициями
+        private async handleMoveTask(detail: any): Promise<void> {
+            const { taskId, targetTaskId, targetSectionId, insertBefore } = detail;
+
+            const task = this.tasks.find(t => t.id === taskId);
+            const targetTask = this.tasks.find(t => t.id === targetTaskId);
+
+            if (!task || !targetTask) return;
+
+            // Обновляем секцию задачи
+            task.sectionId = targetSectionId;
+
+            // Получаем все задачи в целевой секции, отсортированные по порядку
+            const sectionTasks = this.tasks
+                .filter(t => t.sectionId === targetSectionId && t.id !== taskId)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            // Находим позицию целевой задачи
+            const targetIndex = sectionTasks.findIndex(t => t.id === targetTaskId);
+
+            // Вставляем задачу в нужное место
+            if (insertBefore) {
+                sectionTasks.splice(targetIndex, 0, task);
+            } else {
+                sectionTasks.splice(targetIndex + 1, 0, task);
+            }
+
+            // Переназначаем порядковые номера
+            sectionTasks.forEach((t, index) => {
+                t.order = index + 1;
+            });
+
+            try {
+                if (!this.userId) return;
+                const batch = writeBatch(db);
+                sectionTasks.forEach(t => {
+                    batch.update(doc(db, 'users', this.userId!, 'tasks', t.id), { sectionId: t.sectionId, order: t.order });
+                });
+                await batch.commit();
+
+                // Перерисовываем активные задачи
+                this.rerenderActiveTasks();
+            } catch (error) {
+                console.error('Ошибка перемещения задачи:', error);
+            }
+        }
+
+        // Обработка перемещения задачи в другую секцию
+        private async handleMoveTaskToSection(detail: any): Promise<void> {
+            const { taskId, targetSectionId } = detail;
+
+            const task = this.tasks.find(t => t.id === taskId);
+            if (!task || task.sectionId === targetSectionId) return;
+
+            // Получаем максимальный порядок в целевой секции
+            const targetSectionTasks = this.tasks.filter(t => t.sectionId === targetSectionId);
+            const maxOrder = targetSectionTasks.length > 0 ? Math.max(...targetSectionTasks.map(t => t.order || 0)) : 0;
+
+            // Обновляем задачу
+            task.sectionId = targetSectionId;
+            task.order = maxOrder + 1;
+
+            try {
+                if (!this.userId) return;
+                await updateDoc(doc(db, 'users', this.userId, 'tasks', task.id), { sectionId: targetSectionId, order: maxOrder + 1 });
+
+                // Перерисовываем активные задачи
+                this.rerenderActiveTasks();
+            } catch (error) {
+                console.error('Ошибка перемещения задачи в секцию:', error);
+            }
+        }
+
+        private async handleAddInlineTask(detail: any): Promise<void> {
+            const { taskId, sectionId } = detail;
+
+            const referenceTask = this.tasks.find(t => t.id === taskId);
+            if (!referenceTask) return;
+
+            // Получаем все задачи в секции, отсортированные по порядку
+            const sectionTasks = this.tasks
+                .filter(t => t.sectionId === sectionId)
+                .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+            // Находим позицию ссылочной задачи
+            const referenceIndex = sectionTasks.findIndex(t => t.id === taskId);
+
+            try {
+                if (!this.userId) return;
+
+                // Обновляем порядок последующих задач (батч)
+                const batch = writeBatch(db);
+                for (let i = referenceIndex + 1; i < sectionTasks.length; i++) {
+                    const t = sectionTasks[i];
+                    const newOrder = (t.order || 0) + 1;
+                    t.order = newOrder;
+                    batch.update(doc(db, 'users', this.userId, 'tasks', t.id), { order: newOrder });
+                }
+
+                // Создаем новую задачу сразу после ссылочной
+                const createdRef = await addDoc(collection(db, 'users', this.userId, 'tasks'), {
+                    text: '',
+                    sectionId,
+                    order: referenceTask.order + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                });
+                await batch.commit();
+
+                const newTask: Task = {
+                    id: createdRef.id,
+                    text: '',
+                    sectionId,
+                    order: referenceTask.order + 1,
+                    createdAt: new Date(),
+                    isCompleted: false
+                };
+                this.tasks.push(newTask);
+
+                this.createInlineEditor(newTask);
+            } catch (error) {
+                console.error('Ошибка создания inline задачи:', error);
+            }
+        }
+
+        private async handleUpdateTask(detail: any): Promise<void> {
+            const { taskId, newText } = detail;
+
+            const task = this.tasks.find(t => t.id === taskId);
+            if (!task || !newText.trim()) return;
+
+            const oldText = task.text;
+            task.text = newText.trim();
+
+            try {
+                if (!this.userId) return;
+                await updateDoc(doc(db, 'users', this.userId, 'tasks', task.id), { text: task.text });
+
+                // Обновляем DOM без полного перестроения
+                const tasksListInstance = (window as any).tasksListInstance;
+                if (tasksListInstance) {
+                    // Находим элемент задачи и обновляем текст
+                    const taskElement = document.querySelector(`[data-task-id="${taskId}"]`);
+                    if (taskElement) {
+                        const textSpan = taskElement.querySelector('.task-item__text');
+                        if (textSpan) {
+                            textSpan.textContent = newText.trim();
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка обновления задачи:', error);
+                // В случае ошибки восстанавливаем старый текст
+                task.text = oldText;
+            }
+        }
+
+        private createInlineEditor(task: Task): void {
+            const tasksListInstance = (window as any).tasksListInstance;
+            if (!tasksListInstance) return;
+
+            // Перерисовываем задачи, чтобы новая задача появилась
+            tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+
+            // Находим элемент новой задачи
+            const taskElement = document.querySelector(`[data-task-id="${task.id}"]`) as HTMLElement;
+            if (!taskElement) return;
+
+            // Заменяем текст задачи на input
+            const textSpan = taskElement.querySelector('.task-item__text') as HTMLElement;
+            if (!textSpan) return;
+
+            // Создаем input элемент
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'task-item__inline-input';
+            input.value = task.text;
+            input.maxLength = 200;
+
+            // Заменяем span на input
+            textSpan.replaceWith(input);
+
+            // Устанавливаем фокус
+            input.focus();
+
+            // Обработчики событий для сохранения
+            const saveTask = async () => {
+                const newText = input.value.trim();
+                if (newText) {
+                    task.text = newText;
+                    if (this.userId) {
+                        await updateDoc(doc(db, 'users', this.userId, 'tasks', task.id), { text: task.text });
+                    }
+                } else {
+                    // Если текст пустой, удаляем задачу
+                    if (this.userId) {
+                        await deleteDoc(doc(db, 'users', this.userId, 'tasks', task.id));
+                    }
+                    this.tasks = this.tasks.filter(t => t.id !== task.id);
+                }
+
+                // Перерисовываем задачи
+                tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+            };
+
+            input.addEventListener('blur', saveTask);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveTask();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    // Отменяем создание задачи
+                    if (this.userId) {
+                        deleteDoc(doc(db, 'users', this.userId, 'tasks', task.id));
+                    }
+                    this.tasks = this.tasks.filter(t => t.id !== task.id);
+                    tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+                }
+            });
+        }
+
+        // Метод для начальной отрисовки всех задач (используется только при инициализации)
+        private renderTasks(): void {
+            // Получаем экземпляры компонентов из глобальной области
+            const tasksListInstance = (window as any).tasksListInstance;
+            const completedTasksInstance = (window as any).completedTasksInstance;
+
+            // Рендерим задачи
+            if (tasksListInstance) {
+                tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+            }
+            if (completedTasksInstance) {
+                completedTasksInstance.renderCompletedTasks(this.tasks);
+            }
+        }
+
+        // Метод для полной перерисовки активных задач с ViewTransition API
+        private rerenderActiveTasks(): void {
+            const tasksListInstance = (window as any).tasksListInstance;
+
+            if (tasksListInstance && 'startViewTransition' in document) {
+                // Используем ViewTransition API для плавного перехода
+                (document as any).startViewTransition(() => {
+                    tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+                });
+            } else if (tasksListInstance) {
+                tasksListInstance.renderActiveTasks(this.tasks, this.sections);
+            } else {
+            }
+        }
+
+
+    }
+
+    // Инициализация приложения
+    document.addEventListener('DOMContentLoaded', () => {
+        new TaskManager();
+    });
+</script>

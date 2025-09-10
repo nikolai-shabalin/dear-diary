@@ -1,0 +1,66 @@
+---
+// Главная страница приложения для ведения задач
+import Header from '../components/Header.astro';
+import AddTaskForm from '../components/AddTaskForm.astro';
+import TasksList from '../components/TasksList.astro';
+import CompletedTasks from '../components/CompletedTasks.astro';
+import SectionModal from '../components/SectionModal.astro';
+import TaskManager from '../components/TaskManager.astro';
+---
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dear Diary - Управление задачами</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/styles/global.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- Заголовок приложения -->
+        <Header />
+
+        <main class="app-main">
+            <div id="authGate" style="display:none"></div>
+            <!-- Форма добавления задачи -->
+            <AddTaskForm />
+
+            <!-- Список активных задач -->
+            <TasksList />
+
+            <!-- Список выполненных задач -->
+            <CompletedTasks />
+        </main>
+    </div>
+
+    <!-- Модальное окно для создания секции -->
+    <SectionModal />
+
+    <!-- Основной компонент управления задачами -->
+    <TaskManager />
+
+    <script>
+        import { auth } from '../lib/firebase.ts';
+        import { onAuthStateChanged, signOut } from 'firebase/auth';
+
+        const appMain = document.querySelector('.app-main') as HTMLElement;
+        const gate = document.getElementById('authGate');
+
+        if (appMain) {
+            appMain.style.display = 'none';
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) {
+                window.location.href = '/';
+                return;
+            }
+            // авторизован
+            if (appMain) appMain.style.display = '';
+            if (gate) gate.remove();
+        });
+    </script>
+</body>
+</html>

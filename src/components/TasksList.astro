@@ -1,0 +1,1177 @@
+---
+// Компонент списка задач
+---
+
+<section class="tasks-section">
+    <div class="tasks-section__header">
+        <h2 class="tasks-section__title">Активные задачи <span id="activeTasksCount" class="tasks-section__count">(0)</span></h2>
+        <button type="button" id="addSectionBtn" class="tasks-section__add-btn">
+            <span class="tasks-section__add-icon">+</span> Секция
+        </button>
+    </div>
+    <div id="activeTasks" class="tasks-section__list">
+        <!-- Задачи будут добавляться динамически -->
+    </div>
+</section>
+
+<script>
+    // Логика списка задач
+    class TasksList {
+        private container: HTMLElement;
+        private addSectionBtn: HTMLButtonElement;
+        private countElement: HTMLElement;
+
+        constructor() {
+            this.container = document.getElementById('activeTasks') as HTMLElement;
+            this.addSectionBtn = document.getElementById('addSectionBtn') as HTMLButtonElement;
+            this.countElement = document.getElementById('activeTasksCount') as HTMLElement;
+            this.init();
+        }
+
+        private init(): void {
+            this.addSectionBtn.addEventListener('click', () => {
+                // Вызываем глобальный метод открытия модального окна
+                if ((window as any).openSectionModal) {
+                    (window as any).openSectionModal();
+                }
+            });
+        }
+
+        // Метод для рендеринга активных задач (полная перестройка)
+        public renderActiveTasks(tasks: any[], sections: any[]): void {
+            if (!this.container || !this.countElement) return;
+
+            this.container.innerHTML = '';
+
+            // Группируем задачи по секциям
+            const tasksBySection = new Map<string, any[]>();
+
+            // Добавляем все секции
+            sections.forEach(section => {
+                tasksBySection.set(section.id, []);
+            });
+
+            // Распределяем задачи по секциям
+            const activeTasks = tasks.filter(t => !t.isCompleted);
+            activeTasks.forEach(task => {
+                const sectionTasks = tasksBySection.get(task.sectionId);
+                if (sectionTasks) {
+                    sectionTasks.push(task);
+                }
+            });
+
+            // Обновляем счетчик активных задач
+            this.countElement.textContent = `(${activeTasks.length})`;
+
+            // Сортируем секции по порядку
+            const sortedSections = [...sections].sort((a, b) => a.order - b.order);
+
+            // Рендерим каждую секцию (даже пустую)
+            sortedSections.forEach(section => {
+                const sectionTasks = tasksBySection.get(section.id) || [];
+
+                // Создаем заголовок секции
+                const sectionHeader = document.createElement('div');
+                sectionHeader.className = 'tasks-section__section-header';
+                sectionHeader.setAttribute('data-section-id', section.id);
+
+                // Заголовок секции с счетчиком
+                const sectionTitle = document.createElement('h3');
+                sectionTitle.className = 'tasks-section__section-title';
+                const sectionTaskCount = sectionTasks.length;
+                sectionTitle.textContent = `${section.name} (${sectionTaskCount})`;
+
+                // Кнопка удаления секции
+                const deleteSectionBtn = document.createElement('button');
+                deleteSectionBtn.className = 'tasks-section__delete-section-btn';
+                deleteSectionBtn.setAttribute('data-section-id', section.id);
+                deleteSectionBtn.title = 'Удалить секцию';
+                deleteSectionBtn.innerHTML = `
+                    <svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M6.5 2.5H13.5V4.5H6.5V2.5Z" opacity="0.8"/>
+                        <path d="M5 4.5H15V16.5C15 17.0523 14.5523 17.5 14 17.5H6C5.44772 17.5 5 17.0523 5 16.5V4.5Z" opacity="0.9"/>
+                        <path d="M3.5 4.5H16.5V6H3.5V4.5Z"/>
+                        <path d="M7 7.5H13V8.5H7V7.5Z" opacity="0.6"/>
+                        <path d="M7 10H13V11H7V10Z" opacity="0.6"/>
+                        <path d="M7 12.5H13V13.5H7V12.5Z" opacity="0.6"/>
+                        <path d="M14 5.5H6V6.5H14V5.5Z" opacity="0.4"/>
+                        <circle cx="9" cy="8.5" r="0.5" opacity="0.7"/>
+                        <circle cx="11" cy="10.5" r="0.5" opacity="0.7"/>
+                        <circle cx="9" cy="12.5" r="0.5" opacity="0.7"/>
+                    </svg>
+                `;
+
+                // Добавляем обработчик клика
+                deleteSectionBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.handleDeleteSection(section.id, section.name);
+                });
+
+                // Собираем заголовок секции
+                sectionHeader.appendChild(sectionTitle);
+                sectionHeader.appendChild(deleteSectionBtn);
+
+                // Настраиваем drop zone для секции
+                this.setupSectionDropZone(sectionHeader, section.id);
+
+                this.container.appendChild(sectionHeader);
+
+                if (sectionTasks.length > 0) {
+                    // Сортируем задачи по порядку
+                    const sortedTasks = sectionTasks.sort((a, b) => (a.order || 0) - (b.order || 0));
+
+                    // Создаем задачи секции
+                    sortedTasks.forEach((task, index) => {
+                        const taskElement = this.createTaskElement(task, index, section.id);
+                        this.container.appendChild(taskElement);
+                    });
+                } else {
+                    // Для пустых секций показываем сообщение
+                    const emptySectionMsg = document.createElement('p');
+                    emptySectionMsg.className = 'tasks-section__empty-section';
+                    emptySectionMsg.textContent = 'В этой секции пока нет задач';
+                    this.container.appendChild(emptySectionMsg);
+                }
+            });
+
+            // Если нет активных задач, показываем сообщение
+            if (activeTasks.length === 0) {
+                this.container.innerHTML = '<p class="tasks-section__no-tasks">Нет активных задач</p>';
+            }
+        }
+
+        // Метод для добавления новой задачи в DOM
+        public addTaskElement(task: any, sections: any[]): void {
+            if (!this.container || !this.countElement) return;
+
+            // Находим секцию для задачи (секции уже должны быть созданы)
+            const sectionHeader = this.container.querySelector(`[data-section-id="${task.sectionId}"].tasks-section__section-header`);
+            if (!sectionHeader) {
+                console.error('Секция не найдена:', task.sectionId);
+                return;
+            }
+
+            const sectionElement = sectionHeader as HTMLElement;
+
+            // Удаляем сообщение о пустой секции, если оно есть
+            const emptySectionMsg = sectionElement.nextElementSibling;
+            if (emptySectionMsg && emptySectionMsg.classList.contains('tasks-section__empty-section')) {
+                emptySectionMsg.remove();
+            }
+
+            // Создаем элемент задачи
+            const taskElement = this.createTaskElement(task, 0, task.sectionId);
+
+            // Находим все задачи в этой секции
+            const sectionTasks = Array.from(this.container.querySelectorAll(`[data-section-id="${task.sectionId}"].task-item`));
+
+            if (sectionTasks.length === 0) {
+                // Если задач в секции нет, вставляем после заголовка секции
+                this.insertAfter(taskElement, sectionElement);
+            } else {
+                // Вставляем в начало секции (перед первой задачей)
+                this.container.insertBefore(taskElement, sectionTasks[0]);
+            }
+
+            // Обновляем счетчики
+            this.updateSectionCount(task.sectionId);
+            this.updateTotalCount();
+        }
+
+        // Метод для удаления задачи из DOM
+        public removeTaskElement(taskId: string): void {
+            if (!this.container || !this.countElement) return;
+
+            const taskElement = this.container.querySelector(`[data-task-id="${taskId}"]`) as HTMLElement;
+            if (!taskElement) return;
+
+            const sectionId = taskElement.dataset.sectionId;
+            if (!sectionId) return; // Безопасность: проверяем, что sectionId существует
+
+            taskElement.remove();
+
+            // Обновляем счетчики
+            this.updateSectionCount(sectionId);
+            this.updateTotalCount();
+
+            // Проверяем, остались ли задачи в секции
+            const sectionTasks = this.container.querySelectorAll(`[data-section-id="${sectionId}"].task-item`);
+            if (sectionTasks.length === 0) {
+                // Находим заголовок секции и добавляем сообщение о пустой секции
+                const sectionHeader = this.container.querySelector(`[data-section-id="${sectionId}"].tasks-section__section-header`);
+                if (sectionHeader) {
+                    // Проверяем, есть ли уже сообщение о пустой секции
+                    const existingEmptyMsg = sectionHeader.nextElementSibling;
+                    if (!existingEmptyMsg || !existingEmptyMsg.classList.contains('tasks-section__empty-section')) {
+                        // Создаем сообщение о пустой секции
+                        const emptySectionMsg = document.createElement('p');
+                        emptySectionMsg.className = 'tasks-section__empty-section';
+                        emptySectionMsg.textContent = 'В этой секции пока нет задач';
+                        this.insertAfter(emptySectionMsg, sectionHeader);
+                    }
+                }
+            }
+
+            // Проверяем, остались ли вообще активные задачи
+            const allTasks = this.container.querySelectorAll('.task-item');
+            if (allTasks.length === 0) {
+                this.container.innerHTML = '<p class="tasks-section__no-tasks">Нет активных задач</p>';
+                // Обновляем счетчик активных задач
+                this.countElement.textContent = '(0)';
+            }
+        }
+
+        // Метод для обновления статуса задачи
+        public updateTaskElement(taskId: string, isCompleted: boolean): void {
+            const taskElement = this.container?.querySelector(`[data-task-id="${taskId}"]`) as HTMLElement;
+            if (!taskElement) return;
+
+            const checkbox = taskElement.querySelector('.task-item__checkbox-input') as HTMLInputElement;
+            if (checkbox) {
+                checkbox.checked = isCompleted;
+            }
+
+            // Если задача завершается, удаляем её из активных
+            if (isCompleted) {
+                this.removeTaskElement(taskId);
+            }
+        }
+
+        // Метод для обновления счетчика секции
+        private updateSectionCount(sectionId: string): void {
+            const sectionHeader = this.container.querySelector(`[data-section-id="${sectionId}"].tasks-section__section-header`);
+            if (!sectionHeader) return;
+
+            const sectionTitle = sectionHeader.querySelector('.tasks-section__section-title') as HTMLElement;
+            if (!sectionTitle) return;
+
+            // Получаем название секции из оригинального текста (без счетчика)
+            const sectionName = this.getSectionName(sectionId);
+            if (!sectionName) return;
+
+            // Считаем задачи в секции
+            const sectionTasks = this.container.querySelectorAll(`[data-section-id="${sectionId}"].task-item`);
+            const taskCount = sectionTasks.length;
+
+            // Обновляем текст заголовка секции
+            sectionTitle.textContent = `${sectionName} (${taskCount})`;
+        }
+
+        // Метод для обновления общего счетчика активных задач
+        private updateTotalCount(): void {
+            if (!this.countElement) return;
+
+            const allTasks = this.container.querySelectorAll('.task-item');
+            const totalCount = allTasks.length;
+            this.countElement.textContent = `(${totalCount})`;
+        }
+
+        // Метод для получения названия секции
+        private getSectionName(sectionId: string): string | null {
+            // Ищем секцию в глобальных данных (если доступны)
+            if ((window as any).taskManagerInstance) {
+                const sections = (window as any).taskManagerInstance.sections;
+                const section = sections.find((s: any) => s.id === sectionId);
+                return section ? section.name : null;
+            }
+            return null;
+        }
+
+        // Вспомогательный метод для вставки элемента после другого
+        private insertAfter(newNode: Node, referenceNode: Node): void {
+            if (referenceNode.parentNode) {
+                referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
+            }
+        }
+
+
+
+        private createTaskElement(task: any, index: number, sectionId: string): HTMLElement {
+            const taskDiv = document.createElement('div');
+            taskDiv.className = 'task-item';
+            taskDiv.dataset.taskId = task.id;
+            taskDiv.dataset.sectionId = sectionId;
+
+            taskDiv.innerHTML = `
+                <div class="task-item__content">
+                    <div class="task-item__main-row">
+                        <div class="task-item__drag-handle" title="Перетащить задачу">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <circle cx="4" cy="4" r="1"/>
+                                <circle cx="4" cy="8" r="1"/>
+                                <circle cx="4" cy="12" r="1"/>
+                                <circle cx="8" cy="4" r="1"/>
+                                <circle cx="8" cy="8" r="1"/>
+                                <circle cx="8" cy="12" r="1"/>
+                            </svg>
+                        </div>
+                        <label class="task-item__checkbox">
+                            <input type="checkbox" class="task-item__checkbox-input visually-hidden" ${task.isCompleted ? 'checked' : ''}>
+                            <span class="task-item__checkmark"></span>
+                        </label>
+                        <span class="task-item__text">${this.escapeHtml(task.text)}</span>
+                    </div>
+                    <div class="task-item__secondary-row">
+                        <span class="task-item__date">${this.formatDate(task.createdAt)}</span>
+                        <div class="task-item__actions">
+                            <button type="button" class="task-item__add-btn" title="Добавить задачу">+</button>
+                            <button type="button" class="task-item__edit-btn" title="Редактировать задачу">✏️</button>
+                            <button type="button" class="task-item__delete-btn" title="Удалить задачу"></button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Обработчики событий
+            const checkboxLabel = taskDiv.querySelector('.task-item__checkbox') as HTMLLabelElement;
+            const checkbox = taskDiv.querySelector('.task-item__checkbox-input') as HTMLInputElement;
+            const dragHandle = taskDiv.querySelector('.task-item__drag-handle') as HTMLElement;
+
+            // Обработчик клика на label (для случаев, когда чекбокс скрыт)
+            checkboxLabel.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Переключаем состояние чекбокса программно
+                checkbox.checked = !checkbox.checked;
+
+                // Создаем событие для переключения статуса задачи
+                const toggleEvent = new CustomEvent('toggleTask', {
+                    detail: { taskId: task.id }
+                });
+                document.dispatchEvent(toggleEvent);
+            });
+
+            // Резервный обработчик на самом чекбоксе
+            checkbox.addEventListener('change', () => {
+                // Создаем событие для переключения статуса задачи
+                const toggleEvent = new CustomEvent('toggleTask', {
+                    detail: { taskId: task.id }
+                });
+                document.dispatchEvent(toggleEvent);
+            });
+
+            // Обработчик добавления задачи
+            const addBtn = taskDiv.querySelector('.task-item__add-btn') as HTMLButtonElement;
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('Клик по кнопке добавления для задачи:', task.id);
+                const addInlineEvent = new CustomEvent('addInlineTask', {
+                    detail: { taskId: task.id, sectionId: task.sectionId }
+                });
+                document.dispatchEvent(addInlineEvent);
+            });
+
+            // Обработчик редактирования задачи
+            const editBtn = taskDiv.querySelector('.task-item__edit-btn') as HTMLButtonElement;
+            const textSpan = taskDiv.querySelector('.task-item__text') as HTMLElement;
+
+            editBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startEditing(task);
+            });
+
+            // Двойной клик по тексту для редактирования
+            textSpan.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                this.startEditing(task);
+            });
+
+            // Обработчик удаления задачи
+            const deleteBtn = taskDiv.querySelector('.task-item__delete-btn') as HTMLButtonElement;
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                console.log('Клик по кнопке удаления для задачи:', task.id);
+                const deleteEvent = new CustomEvent('deleteTask', {
+                    detail: { taskId: task.id }
+                });
+                console.log('Создаю событие deleteTask:', deleteEvent);
+                document.dispatchEvent(deleteEvent);
+                console.log('Событие отправлено');
+            });
+
+
+
+
+            // Настройка drag-and-drop
+            this.setupDragAndDrop(taskDiv, dragHandle, task);
+
+            return taskDiv;
+        }
+
+        // Настройка drop zone для заголовка секции
+        private setupSectionDropZone(sectionHeader: HTMLElement, sectionId: string): void {
+            sectionHeader.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer!.dropEffect = 'move';
+                sectionHeader.classList.add('drop-zone-active');
+            });
+
+            sectionHeader.addEventListener('dragleave', (e) => {
+                if (!sectionHeader.contains(e.relatedTarget as Node)) {
+                    sectionHeader.classList.remove('drop-zone-active');
+                }
+            });
+
+            sectionHeader.addEventListener('drop', (e) => {
+                e.preventDefault();
+                const dragData = JSON.parse(e.dataTransfer!.getData('text/plain'));
+
+                // Создаем событие для перемещения задачи в секцию
+                const moveToSectionEvent = new CustomEvent('moveTaskToSection', {
+                    detail: {
+                        taskId: dragData.taskId,
+                        targetSectionId: sectionId
+                    }
+                });
+
+                document.dispatchEvent(moveToSectionEvent);
+                this.clearDropZones();
+            });
+        }
+
+        // Настройка drag-and-drop для задачи
+        private setupDragAndDrop(taskDiv: HTMLElement, dragHandle: HTMLElement, task: any): void {
+            // Делаем элемент перетаскиваемым только при взаимодействии с drag handle
+            taskDiv.draggable = false;
+
+            // Обработчики для drag handle
+            dragHandle.addEventListener('mousedown', () => {
+                taskDiv.draggable = true;
+            });
+
+            dragHandle.addEventListener('mouseup', () => {
+                taskDiv.draggable = false;
+            });
+
+            // Обработчики drag events
+            taskDiv.addEventListener('dragstart', (e) => {
+                if (!taskDiv.draggable) {
+                    e.preventDefault();
+                    return;
+                }
+
+                taskDiv.classList.add('dragging');
+
+                // Сохраняем данные о перетаскиваемой задаче
+                e.dataTransfer!.setData('text/plain', JSON.stringify({
+                    taskId: task.id,
+                    sectionId: task.sectionId
+                }));
+                e.dataTransfer!.effectAllowed = 'move';
+            });
+
+            taskDiv.addEventListener('dragend', () => {
+                taskDiv.classList.remove('dragging');
+                taskDiv.draggable = false;
+                this.clearDropZones();
+            });
+
+            // Обработчики для drop zone
+            taskDiv.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer!.dropEffect = 'move';
+
+                const draggingTask = document.querySelector('.task-item.dragging');
+                if (draggingTask && draggingTask !== taskDiv) {
+                    this.showDropIndicator(taskDiv, e);
+                }
+            });
+
+            taskDiv.addEventListener('dragleave', (e) => {
+                // Проверяем, что мышь действительно покинула элемент
+                if (!taskDiv.contains(e.relatedTarget as Node)) {
+                    taskDiv.classList.remove('drag-over');
+                }
+            });
+
+            taskDiv.addEventListener('drop', (e) => {
+                e.preventDefault();
+                this.handleTaskDrop(e, taskDiv);
+            });
+        }
+
+        // Показать индикатор места вставки
+        private showDropIndicator(targetTask: HTMLElement, e: DragEvent): void {
+            targetTask.classList.add('drag-over');
+
+            // Сохраняем информацию о позиции для использования в drop
+            const rect = targetTask.getBoundingClientRect();
+            const midY = rect.top + rect.height / 2;
+
+            if (e.clientY < midY) {
+                targetTask.dataset.dropPosition = 'before';
+            } else {
+                targetTask.dataset.dropPosition = 'after';
+            }
+        }
+
+        // Очистить все drop zones
+        private clearDropZones(): void {
+            document.querySelectorAll('.task-item').forEach(task => {
+                task.classList.remove('drag-over', 'drop-before', 'drop-after');
+                delete (task as HTMLElement).dataset.dropPosition;
+            });
+            document.querySelectorAll('.tasks-section__section-header').forEach(header => {
+                header.classList.remove('drop-zone-active');
+            });
+        }
+
+        // Обработка drop задачи
+        private handleTaskDrop(e: DragEvent, targetTask: HTMLElement): void {
+            const dragData = JSON.parse(e.dataTransfer!.getData('text/plain'));
+            const targetTaskId = targetTask.dataset.taskId;
+            const targetSectionId = targetTask.dataset.sectionId;
+
+            if (dragData.taskId === targetTaskId) {
+                return; // Не можем переместить задачу на саму себя
+            }
+
+            // Определяем позицию для вставки из dataset
+            const insertBefore = targetTask.dataset.dropPosition === 'before';
+
+            // Создаем событие для перемещения задачи
+            const moveTaskEvent = new CustomEvent('moveTask', {
+                detail: {
+                    taskId: dragData.taskId,
+                    targetTaskId: targetTaskId,
+                    targetSectionId: targetSectionId,
+                    insertBefore: insertBefore
+                }
+            });
+
+            document.dispatchEvent(moveTaskEvent);
+            this.clearDropZones();
+        }
+
+        private escapeHtml(text: string): string {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        private formatDate(date: Date): string {
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Метод для удаления секции
+        private handleDeleteSection(sectionId: string, sectionName: string): void {
+            // Не позволяем удалить секцию по умолчанию
+            if (sectionId === 'default') {
+                alert('Нельзя удалить секцию "Основные задачи"');
+                return;
+            }
+
+            // Проверяем, есть ли задачи в секции
+            const sectionTasks = this.container.querySelectorAll(`[data-section-id="${sectionId}"].task-item`);
+            if (sectionTasks.length > 0) {
+                alert(`Нельзя удалить секцию "${sectionName}", так как в ней есть задачи. Сначала удалите все задачи из секции.`);
+                return;
+            }
+
+            // Отправляем событие для удаления секции
+            const deleteSectionEvent = new CustomEvent('deleteSection', {
+                detail: { sectionId: sectionId }
+            });
+            document.dispatchEvent(deleteSectionEvent);
+        }
+
+        // Метод для начала редактирования задачи
+        private startEditing(task: any): void {
+            const taskElement = document.querySelector(`[data-task-id="${task.id}"]`) as HTMLElement;
+            if (!taskElement) return;
+
+            const textSpan = taskElement.querySelector('.task-item__text') as HTMLElement;
+            if (!textSpan) return;
+
+            // Создаем input элемент
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'task-item__inline-input';
+            input.value = task.text;
+            input.maxLength = 200;
+
+            // Заменяем span на input
+            textSpan.replaceWith(input);
+
+            // Устанавливаем фокус и выделяем весь текст
+            input.focus();
+            input.select();
+
+            // Обработчики событий для сохранения
+            const saveTask = () => {
+                const newText = input.value.trim();
+                if (newText && newText !== task.text) {
+                    // Отправляем событие для обновления задачи
+                    const updateEvent = new CustomEvent('updateTask', {
+                        detail: { taskId: task.id, newText: newText }
+                    });
+                    document.dispatchEvent(updateEvent);
+                } else if (!newText) {
+                    // Если текст пустой, удаляем задачу
+                    const deleteEvent = new CustomEvent('deleteTask', {
+                        detail: { taskId: task.id }
+                    });
+                    document.dispatchEvent(deleteEvent);
+                } else {
+                    // Если текст не изменился, просто восстанавливаем span
+                    const newSpan = document.createElement('span');
+                    newSpan.className = 'task-item__text';
+                    newSpan.textContent = task.text;
+                    input.replaceWith(newSpan);
+                }
+            };
+
+            input.addEventListener('blur', saveTask);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    saveTask();
+                }
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    // Отменяем редактирование - восстанавливаем оригинальный текст
+                    const newSpan = document.createElement('span');
+                    newSpan.className = 'task-item__text';
+                    newSpan.textContent = task.text;
+                    input.replaceWith(newSpan);
+                }
+            });
+        }
+
+
+    }
+
+    // Инициализация списка задач при загрузке DOM
+    document.addEventListener('DOMContentLoaded', () => {
+        const tasksListInstance = new TasksList();
+        // Сохраняем экземпляр в глобальной области для доступа из TaskManager
+        (window as any).tasksListInstance = tasksListInstance;
+    });
+</script>
+
+<style is:global>
+    /* Mobile First - Tasks Section */
+    .tasks-section {
+        padding: 1rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .tasks-section__header {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .tasks-section__title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        line-height: 1.3;
+    }
+
+    .tasks-section__count {
+        background: var(--accent-color);
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .tasks-section__section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 1rem 0 0.75rem 0;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--border-color);
+        transition: all 0.2s ease;
+    }
+
+    .tasks-section__section-header.drop-zone-active {
+        border-bottom-color: var(--primary-color);
+        background: var(--bg-secondary);
+        padding: 0.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: 1rem;
+    }
+
+    .tasks-section__section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        line-height: 1.3;
+    }
+
+    .tasks-section__delete-section-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0.5rem;
+        color: var(--text-muted);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.7;
+        transition: all 0.2s ease;
+        min-width: var(--touch-target);
+        min-height: var(--touch-target);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .tasks-section__delete-section-btn:hover {
+        color: var(--danger-color);
+        background: var(--bg-secondary);
+        opacity: 1;
+        transform: scale(1.1);
+    }
+
+    .tasks-section__delete-section-btn:active {
+        transform: scale(0.95);
+    }
+
+    .tasks-section__add-btn {
+        padding: 0.75rem 1rem;
+        border: 2px solid var(--primary-color);
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--primary-color);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        min-height: var(--touch-target);
+        width: 100%;
+        -webkit-tap-highlight-color: transparent;
+        transition: all 0.2s ease;
+    }
+
+    .tasks-section__add-btn:hover {
+        background: var(--primary-color);
+        color: white;
+        transform: translateY(-1px);
+    }
+
+    .tasks-section__add-btn:active {
+        transform: translateY(0);
+    }
+
+    .tasks-section__add-icon {
+        font-weight: 600;
+    }
+
+    .tasks-section__list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .tasks-section__no-tasks {
+        text-align: center;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 2rem;
+    }
+
+    .tasks-section__empty-section {
+        text-align: center;
+        color: var(--text-muted);
+        font-style: italic;
+        padding: 1rem 0;
+        margin: 0.5rem 0;
+        font-size: 0.9rem;
+    }
+
+    /* Mobile First - Элементы задач */
+    .task-item {
+        background: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius-md);
+        padding: 0.75rem;
+        user-select: none;
+        position: relative;
+        animation: fadeIn 0.3s ease-out;
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .task-item:hover {
+        border-color: var(--border-color);
+        box-shadow: none;
+    }
+
+    /* Состояния перетаскивания */
+    .task-item.dragging {
+        opacity: 0.8;
+        transform: scale(1.05);
+        z-index: 1000;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .task-item.drag-over {
+        transform: scale(0.95);
+        opacity: 0.7;
+    }
+
+
+
+
+
+    .task-item__content {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .task-item__main-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .task-item__secondary-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .task-item__actions {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    /* Зона перетаскивания */
+    .task-item__drag-handle {
+        cursor: grab;
+        color: var(--text-muted);
+        padding: 0.25rem;
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.6;
+        transition: all 0.2s ease;
+        flex-shrink: 0;
+    }
+
+    .task-item__drag-handle:hover {
+        opacity: 1;
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+    }
+
+    .task-item__drag-handle:active {
+        cursor: grabbing;
+    }
+
+    .task-item.dragging .task-item__drag-handle {
+        cursor: grabbing;
+        opacity: 1;
+    }
+
+
+
+    /* Чекбоксы */
+    .task-item__checkbox {
+        position: relative;
+        display: flex;
+        align-items: center;
+        cursor: pointer;
+    }
+
+    .task-item__checkbox-input {
+        position: absolute;
+        opacity: 0;
+        cursor: pointer;
+        height: 0;
+        width: 0;
+    }
+
+    /* Фокус на label при фокусе на скрытом чекбоксе */
+    .task-item__checkbox:has(.task-item__checkbox-input:focus-visible) {
+        outline: 3px solid var(--primary-color);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+    }
+
+    .task-item__checkmark {
+        width: 1.5rem;
+        height: 1.5rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-sm);
+        background: var(--bg-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: transparent;
+    }
+
+    .task-item__checkbox-input:checked ~ .task-item__checkmark {
+        background: var(--accent-color);
+        border-color: var(--accent-color);
+        color: white;
+    }
+
+    .task-item__checkbox .task-item__checkmark {
+        border-color: var(--border-color);
+    }
+
+    /* Текст задачи */
+    .task-item__text {
+        flex: 1;
+        font-size: 1rem;
+        color: var(--text-primary);
+        word-break: break-word;
+    }
+
+    /* Дата задачи */
+    .task-item__date {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+
+    /* Mobile First - Кнопка добавления */
+    .task-item__add-btn {
+        width: var(--touch-target);
+        height: var(--touch-target);
+        border: none;
+        border-radius: var(--radius-sm);
+        background: var(--primary-color);
+        color: white;
+        font-size: 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+        flex-shrink: 0;
+    }
+
+    .task-item__add-btn:hover {
+        background: var(--primary-hover);
+        transform: scale(1.1);
+    }
+
+    .task-item__add-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* Inline input для редактирования новой задачи */
+    .task-item__inline-input {
+        flex: 1;
+        border: 2px solid var(--primary-color);
+        border-radius: var(--radius-sm);
+        padding: 0.25rem 0.5rem;
+        font-size: 1rem;
+        color: var(--text-primary);
+        background: var(--bg-primary);
+        font-family: inherit;
+        outline: none;
+    }
+
+    .task-item__inline-input:focus {
+        border-color: var(--primary-hover);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* Mobile First - Кнопка удаления */
+    .task-item__delete-btn {
+        position: relative;
+        width: var(--touch-target);
+        height: var(--touch-target);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        color: var(--text-muted);
+        border-radius: var(--radius-sm);
+        -webkit-tap-highlight-color: transparent;
+        flex-shrink: 0;
+    }
+
+    .task-item__delete-btn::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 20px;
+        height: 20px;
+        background-image: url('/images/trash-icon.svg');
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+
+    .task-item__delete-btn:hover {
+        color: var(--danger-color);
+        background: var(--bg-secondary);
+        transform: scale(1.1);
+    }
+
+    .task-item__delete-btn:hover::before {
+        filter: brightness(1.2);
+    }
+
+    .task-item__delete-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* Mobile First - Кнопка редактирования */
+    .task-item__edit-btn {
+        position: relative;
+        width: var(--touch-target);
+        height: var(--touch-target);
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+        color: var(--text-muted);
+        border-radius: var(--radius-sm);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.875rem;
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+        flex-shrink: 0;
+    }
+
+    .task-item__edit-btn:hover {
+        color: var(--text-secondary);
+        background: var(--bg-secondary);
+        transform: scale(1.1);
+    }
+
+    .task-item__edit-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* Стили для текста задачи при наведении */
+    .task-item__text {
+        cursor: text;
+        user-select: text;
+    }
+
+    .task-item__text:hover {
+        background: rgba(99, 102, 241, 0.05);
+        border-radius: var(--radius-sm);
+        padding: 0.125rem 0.25rem;
+        margin: -0.125rem -0.25rem;
+        transition: all 0.2s ease;
+    }
+
+    /* Анимации */
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    /* Планшеты */
+    @media (min-width: 768px) {
+        .tasks-section {
+            padding: 1.5rem;
+        }
+
+        .tasks-section__header {
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .tasks-section__title {
+            font-size: 1.5rem;
+        }
+
+        .tasks-section__add-btn {
+            width: auto;
+            padding: 0.5rem 1rem;
+        }
+
+        .tasks-section__section-header {
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        .tasks-section__section-title {
+            font-size: 1.25rem;
+        }
+
+        .task-item {
+            padding: 1rem;
+        }
+
+        .task-item__content {
+            flex-direction: row;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .task-item__main-row {
+            flex: 1;
+        }
+
+        .task-item__secondary-row {
+            flex-direction: row;
+            justify-content: flex-end;
+            gap: 1rem;
+        }
+
+        .task-item__add-btn {
+            width: 24px;
+            height: 24px;
+        }
+
+        .task-item__delete-btn {
+            width: 20px;
+            height: 20px;
+        }
+
+        .task-item__edit-btn {
+            width: 24px;
+            height: 24px;
+        }
+
+        .task-item__date {
+            white-space: nowrap;
+            font-size: 0.875rem;
+        }
+    }
+
+    /* Десктопы */
+    @media (min-width: 1024px) {
+        .tasks-section {
+            padding: 2rem;
+        }
+    }
+</style>

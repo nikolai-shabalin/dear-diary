@@ -1,0 +1,178 @@
+---
+// Компонент формы добавления задачи
+---
+
+<section class="add-task-section">
+    <form id="addTaskForm" class="add-task-section__form">
+        <div class="add-task-section__input-container">
+            <input
+                type="text"
+                name="taskText"
+                id="taskInput"
+                class="add-task-section__input"
+                placeholder="Введите новую задачу..."
+                maxlength="200"
+                required
+            >
+            <button type="submit" class="add-task-section__btn">
+                <span class="add-task-section__btn-icon">+</span>
+            </button>
+        </div>
+    </form>
+</section>
+
+<script>
+    // Логика добавления задачи
+    class AddTaskForm {
+        private form: HTMLFormElement;
+        private input: HTMLInputElement;
+
+        constructor() {
+            this.form = document.getElementById('addTaskForm') as HTMLFormElement;
+            this.input = document.getElementById('taskInput') as HTMLInputElement;
+            this.init();
+        }
+
+        private init(): void {
+            this.form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleSubmit(e);
+            });
+        }
+
+        private async handleSubmit(e: Event): Promise<void> {
+            const formData = new FormData(this.form);
+            const taskText = formData.get('taskText') as string;
+
+            if (!taskText.trim()) return;
+
+            // Создаем событие для передачи данных в основной TaskManager
+            const addTaskEvent = new CustomEvent('addTask', {
+                detail: {
+                    text: taskText.trim()
+                }
+            });
+
+            document.dispatchEvent(addTaskEvent);
+            this.form.reset();
+        }
+
+        // Метод для очистки формы (может быть вызван извне)
+        public reset(): void {
+            this.form.reset();
+        }
+    }
+
+    // Инициализация формы при загрузке DOM
+    document.addEventListener('DOMContentLoaded', () => {
+        new AddTaskForm();
+    });
+</script>
+
+<style is:global>
+    /* Mobile First - Add Task Form */
+    .add-task-section {
+        padding: 1rem;
+        background: var(--bg-secondary);
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .add-task-section__form {
+        margin: 0;
+    }
+
+    .add-task-section__input-container {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: stretch;
+    }
+
+    .add-task-section__input {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-size: 1rem;
+        background: var(--bg-primary);
+        color: #000000;
+        font-family: inherit;
+        min-height: var(--touch-target);
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .add-task-section__input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .add-task-section__input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .add-task-section__btn {
+        width: 100%;
+        height: var(--touch-target);
+        border: none;
+        border-radius: var(--radius-md);
+        background: var(--primary-color);
+        color: white;
+        font-size: 1.125rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .add-task-section__btn:hover {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .add-task-section__btn:active {
+        transform: translateY(0);
+        background: var(--primary-hover);
+    }
+
+    .add-task-section__btn-icon {
+        font-weight: 600;
+    }
+
+    /* Планшеты */
+    @media (min-width: 768px) {
+        .add-task-section {
+            padding: 1.5rem;
+        }
+
+        .add-task-section__input-container {
+            flex-direction: row;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .add-task-section__input {
+            flex: 1;
+            padding: 1rem 1.5rem;
+        }
+
+        .add-task-section__btn {
+            width: 3.5rem;
+            height: 3.5rem;
+            font-size: 1.5rem;
+        }
+    }
+
+    /* Десктопы */
+    @media (min-width: 1024px) {
+        .add-task-section {
+            padding: 2rem;
+        }
+    }
+</style>

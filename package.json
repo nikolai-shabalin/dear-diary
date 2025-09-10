@@ -1,14 +1,22 @@
 {
-  "name": "",
+  "name": "deat-diary",
   "type": "module",
   "version": "0.0.1",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "format": "eclint fix src"
   },
   "dependencies": {
-    "astro": "^5.13.5"
+    "astro": "^5.13.7",
+    "firebase": "^12.2.1"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "eclint": "^2.8.1"
   }
 }

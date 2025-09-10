@@ -1,16 +1,255 @@
 ---
-
+// Страница авторизации
+import Header from '../components/Header.astro';
 ---
 
-<html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
-	<body>
-		<h1>Astro</h1>
-	</body>
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dear Diary - Вход в систему</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="stylesheet" href="/src/styles/global.css" />
+</head>
+<body>
+    <div id="app">
+        <!-- Заголовок приложения -->
+        <Header />
+
+        <main class="app-main">
+            <!-- Форма входа -->
+            <section class="login-section">
+                <div class="login-section__container">
+                    <form id="loginForm" class="login-section__form" method="post">
+                        <div class="login-section__field">
+                            <label for="email" class="login-section__label">Email</label>
+                            <input
+                                type="email"
+                                name="email"
+                                id="email"
+                                class="login-section__input"
+                                placeholder="Введите ваш email..."
+                                required
+                            >
+                        </div>
+
+                        <div class="login-section__field">
+                            <label for="password" class="login-section__label">Пароль</label>
+                            <input
+                                type="password"
+                                name="password"
+                                id="password"
+                                class="login-section__input"
+                                placeholder="Введите ваш пароль..."
+                                required
+                            >
+                        </div>
+
+                        <button type="submit" class="login-section__btn">
+                            <span class="login-section__btn-text">Залогиниться</span>
+                        </button>
+                    </form>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        import { auth } from '../lib/firebase.ts';
+        import { onAuthStateChanged, signInWithEmailAndPassword } from 'firebase/auth';
+
+        const form = document.getElementById('loginForm');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                // Уже авторизован — редирект на задачи
+                window.location.href = '/tasks';
+            }
+        });
+
+        form?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+
+            const email = emailInput && 'value' in emailInput ? String(emailInput.value) : '';
+            const password = passwordInput && 'value' in passwordInput ? String(passwordInput.value) : '';
+
+            const submitBtn = form.querySelector('.login-section__btn') as HTMLButtonElement;
+            if (submitBtn) submitBtn.disabled = true;
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                window.location.href = '/tasks';
+            } catch (err) {
+                alert('Ошибка входа. Проверьте email/пароль.');
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
 </html>
+
+<style is:global>
+    /* Mobile First - Login Section */
+    .login-section {
+        padding: 1.5rem 1rem;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 50vh;
+    }
+
+    .login-section__container {
+        width: 100%;
+        max-width: 100%;
+        text-align: center;
+    }
+
+    .login-section__title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+        margin-top: 0;
+        line-height: 1.2;
+    }
+
+    .login-section__subtitle {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        margin-bottom: 1.5rem;
+        line-height: 1.4;
+    }
+
+    .login-section__form {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .login-section__field {
+        display: flex;
+        flex-direction: column;
+        text-align: left;
+    }
+
+    .login-section__label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    .login-section__input {
+        padding: 0.875rem 1rem;
+        border: 2px solid var(--border-color);
+        border-radius: var(--radius-md);
+        font-size: 1rem;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-family: inherit;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        min-height: var(--touch-target);
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    .login-section__input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .login-section__input:focus {
+        outline: none;
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .login-section__input:hover:not(:focus) {
+        border-color: var(--border-hover);
+    }
+
+    .login-section__btn {
+        padding: 0.875rem 1.5rem;
+        border: none;
+        border-radius: var(--radius-md);
+        background: var(--primary-color);
+        color: white;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-sm);
+        transition: all 0.2s ease;
+        margin-top: 0.5rem;
+        min-height: var(--touch-target);
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .login-section__btn:hover:not(:disabled) {
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-md);
+    }
+
+    .login-section__btn:active:not(:disabled) {
+        transform: translateY(0);
+    }
+
+    .login-section__btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+    }
+
+    .login-section__btn-text {
+        font-weight: 600;
+    }
+
+    /* Планшеты */
+    @media (min-width: 768px) {
+        .login-section {
+            padding: 2rem 1.5rem;
+            min-height: 60vh;
+        }
+
+        .login-section__container {
+            max-width: 400px;
+        }
+
+        .login-section__title {
+            font-size: 1.75rem;
+        }
+
+        .login-section__subtitle {
+            font-size: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .login-section__form {
+            gap: 1.5rem;
+        }
+
+        .login-section__input {
+            padding: 1rem 1.5rem;
+        }
+
+        .login-section__btn {
+            padding: 1rem 2rem;
+        }
+    }
+
+    /* Десктопы */
+    @media (min-width: 1024px) {
+        .login-section {
+            padding: 3rem 2rem;
+        }
+
+        .login-section__title {
+            font-size: 2rem;
+        }
+    }
+</style>
