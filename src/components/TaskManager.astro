@@ -64,6 +64,7 @@
 
                 await this.ensureDefaultSection();
                 await this.loadData();
+                await this.loadCompletedTasks();
                 this.setupEventListeners();
                 (window as any).taskManagerInstance = this;
                 setTimeout(() => { this.renderTasks(); }, 100);
@@ -88,7 +89,7 @@
                 this.sections.sort((a, b) => a.order - b.order);
 
                 // Tasks
-                const tasksSnap = await getDocs(collection(db, 'users', this.userId, 'tasks'));
+                const tasksSnap = await getDocs(query(collection(db, 'users', this.userId, 'tasks'), where('isCompleted', '==', false)));
                 this.tasks = tasksSnap.docs.map(d => {
                     const data: any = d.data();
                     return {
@@ -103,6 +104,37 @@
                 });
             } catch (error) {
                 console.error('Ошибка загрузки данных:', error);
+            }
+        }
+
+        private async loadCompletedTasks(): Promise<void> {
+            try {
+                if (!this.userId) return;
+
+                const completedTasksSnap = await getDocs(query(collection(db, 'users', this.userId, 'tasks'), where('isCompleted', '==', true)));
+                const completedTasks: Task[] = completedTasksSnap.docs.map(d => {
+                    const data: any = d.data();
+                    return {
+                        id: d.id,
+                        text: data.text,
+                        sectionId: data.sectionId,
+                        order: data.order ?? 0,
+                        createdAt: data.createdAt && data.createdAt.toDate ? data.createdAt.toDate() : new Date(),
+                        completedAt: data.completedAt && data.completedAt.toDate ? data.completedAt.toDate() : undefined,
+                        isCompleted: !!data.isCompleted
+                    } as Task;
+                });
+
+                // Добавляем завершенные задачи к текущему списку задач, избегая дубликатов
+                completedTasks.forEach(newTask => {
+                    if (!this.tasks.some(existingTask => existingTask.id === newTask.id)) {
+                        this.tasks.push(newTask);
+                    }
+                });
+
+                this.renderTasks();
+            } catch (error) {
+                console.error('Ошибка загрузки завершенных задач:', error);
             }
         }
 
@@ -157,6 +189,9 @@
                 this.handleUpdateTask(e.detail);
             });
 
+            document.addEventListener('loadCompletedTasks', () => {
+                this.loadCompletedTasks();
+            });
         }
 
         private async handleAddTask(taskText: string): Promise<void> {
